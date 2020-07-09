@@ -13,17 +13,19 @@ import java.util.ArrayList;
  */
 public class MapReader {
 
+	public final static String defaultMapLocation = "testData/sitemap.txt";
+
 	/**
 	 * read the test data file and covert it to a two-d array
 	 * 
 	 * @return a two-d array of site map
 	 */
-	public static char[][] readSite(String filePath) {
+	public static char[][] readSite() {
 		char[][] site = null;
 		try {
 			// read each line of map into an array list
 			ArrayList<String> lines = new ArrayList<>();
-			BufferedReader reader = new BufferedReader(new FileReader(filePath));
+			BufferedReader reader = new BufferedReader(new FileReader(defaultMapLocation));
 			while (true) {
 				String line = reader.readLine();
 				if (line == null) {

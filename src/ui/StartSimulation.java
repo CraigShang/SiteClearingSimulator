@@ -3,7 +3,8 @@ package ui;
 import java.util.Scanner;
 
 import model.BullDozerSimulator;
-import utility.MapReader;
+import model.Command;
+import model.CostManager;
 
 public class StartSimulation {
 
@@ -24,10 +25,10 @@ public class StartSimulation {
 	 */
 	private static void showMap(BullDozerSimulator bull) {
 		// print the map, between each tile a space is added to make it look better
-		for (int i = 0; i < bull.getSite().length; i++) {
+		for (int i = 0; i < bull.getSiteManager().getSite().length; i++) {
 			StringBuffer line = new StringBuffer("    ");
-			for (int j = 0; j < bull.getSite()[0].length; j++) {
-				line.append(bull.getSite()[i][j]);
+			for (int j = 0; j < bull.getSiteManager().getSite()[0].length; j++) {
+				line.append(bull.getSiteManager().getSite()[i][j]);
 				line.append(" ");
 			}
 			System.out.println(line.toString());
@@ -59,10 +60,11 @@ public class StartSimulation {
 		// validate command
 		String[] cmdWithVar = cmd.split(" ");
 		boolean validCommand = false;
-		if (cmdWithVar.length == 1
-				&& (cmdWithVar[0].equals("l") || cmdWithVar[0].equals("r") || cmdWithVar[0].equals("q"))) {
+		if (cmdWithVar.length == 1 && (cmdWithVar[0].equals(Command.TURN_LEFT_COMMAND_CODE)
+				|| cmdWithVar[0].equals(Command.TURN_RIGHT_COMMAND_CODE)
+				|| cmdWithVar[0].equals(Command.QUIT_COMMAND_CODE))) {
 			validCommand = true;
-		} else if (cmdWithVar.length == 2 && cmdWithVar[0].equals("a")) {
+		} else if (cmdWithVar.length == 2 && cmdWithVar[0].equals(Command.ADVANCE_COMMAND_CODE)) {
 			try {
 				Integer.parseInt(cmdWithVar[1]);
 			} catch (NumberFormatException e) {
@@ -100,24 +102,31 @@ public class StartSimulation {
 		// the format may be a little from the requirement doc
 		int totalCost = 0;
 		System.out.println(appendToThrity("Item") + appendToNine("Quantity") + appendToNine("Cost"));
-		System.out.println(appendToThrity(bull.COMM_COST) + appendToNine(Integer.toString(bull.getCommCost()))
-				+ appendToNine(Integer.toString(bull.getCommCost())));
-		totalCost += bull.getCommCost();
-		System.out.println(appendToThrity(bull.FUEL_COST) + appendToNine(Integer.toString(bull.getFuelCost()))
-				+ appendToNine(Integer.toString(bull.getFuelCost())));
-		totalCost += bull.getFuelCost();
-		System.out.println(
-				appendToThrity(bull.UNCLEARED_COST) + appendToNine(Integer.toString(bull.getUnclearedSquareCost()))
-						+ appendToNine(Integer.toString(bull.getUnclearedSquareCost() * 3)));
-		totalCost += bull.getCostEvent().get("uncleared squares") * 3;
-		System.out.println(
-				appendToThrity(bull.DESTROY_TREE_COST) + appendToNine(Integer.toString(bull.getDestroyTreeCost()))
-						+ appendToNine(Integer.toString(bull.getDestroyTreeCost() * 10)));
-		totalCost += bull.getDestroyTreeCost() * 10;
-		System.out.println(
-				appendToThrity(bull.PAINT_DAMAGE_COST) + appendToNine(Integer.toString(bull.getPaintDamageCost()))
-						+ appendToNine(Integer.toString(bull.getPaintDamageCost() * 2)));
-		totalCost += bull.getPaintDamageCost() * 2;
+		bull.getCostManager();
+		System.out.println(appendToThrity(CostManager.COMM_COST)
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCount(CostManager.COMM_COST)))
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCredit(CostManager.COMM_COST))));
+		totalCost += bull.getCostManager().getCostCredit(CostManager.COMM_COST);
+		bull.getCostManager();
+		System.out.println(appendToThrity(CostManager.FUEL_COST)
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCount(CostManager.FUEL_COST)))
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCredit(CostManager.FUEL_COST))));
+		totalCost += bull.getCostManager().getCostCredit(CostManager.FUEL_COST);
+		bull.getCostManager();
+		System.out.println(appendToThrity(CostManager.UNCLEARED_COST)
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCount(CostManager.UNCLEARED_COST)))
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCredit(CostManager.UNCLEARED_COST))));
+		totalCost += bull.getCostManager().getCostCredit(CostManager.UNCLEARED_COST);
+		bull.getCostManager();
+		System.out.println(appendToThrity(CostManager.DESTROY_TREE_COST)
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCount(CostManager.DESTROY_TREE_COST)))
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCredit(CostManager.DESTROY_TREE_COST))));
+		totalCost += bull.getCostManager().getCostCredit(CostManager.DESTROY_TREE_COST);
+		bull.getCostManager();
+		System.out.println(appendToThrity(CostManager.PAINT_DAMAGE_COST)
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCount(CostManager.PAINT_DAMAGE_COST)))
+				+ appendToNine(Integer.toString(bull.getCostManager().getCostCredit(CostManager.PAINT_DAMAGE_COST))));
+		totalCost += bull.getCostManager().getCostCredit(CostManager.PAINT_DAMAGE_COST);
 		System.out.println("----");
 		System.out.println(appendToThrity("Total") + appendToNine("") + appendToNine(Integer.toString(totalCost)));
 		System.out.println();
@@ -158,22 +167,20 @@ public class StartSimulation {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		BullDozerSimulator bull = new BullDozerSimulator(MapReader.readSite("testData/sitemap.txt"));
-		if (bull.getSite() != null) {
-			showWelcomeInfo();
-			showMap(bull);
-			showBullDozerStartInfo();
-			while (true) {
-				showCommandHint();
-				String[] cmd = readCommand();
-				// when the command is a final command, leave the cycle and close the input
-				// stream
-				if (cmd != null && bull.execute(cmd)) {
-					in.close();
-					break;
-				}
+		BullDozerSimulator bull = new BullDozerSimulator();
+		showWelcomeInfo();
+		showMap(bull);
+		showBullDozerStartInfo();
+		while (true) {
+			showCommandHint();
+			String[] cmd = readCommand();
+			// when the command is a final command, leave the cycle and close the input
+			// stream
+			if (cmd != null && bull.execute(cmd)) {
+				in.close();
+				break;
 			}
-			showResult(bull);
 		}
+		showResult(bull);
 	}
 }

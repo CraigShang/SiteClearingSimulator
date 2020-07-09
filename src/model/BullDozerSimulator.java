@@ -1,14 +1,14 @@
 package model;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.List;
+
+import model.DirectionManager.Direction;
+import model.DirectionManager.Turn;
 
 public class BullDozerSimulator {
 
-	/**
-	 * a 2d array of char to represent the map
-	 */
-	private char[][] site;
+	private Site site;
 
 	/**
 	 * the int array for the current coordinate of the bull dozer
@@ -26,139 +26,65 @@ public class BullDozerSimulator {
 	private Direction facing;
 
 	/**
-	 * enums for directions
-	 * 
-	 * @author Peizheng Shang
-	 *
-	 */
-	enum Direction {
-		EAST, WEST, SOUTH, NORTH
-	}
-
-	/**
 	 * a list of command history
 	 */
-	private ArrayList<String> commands;
+	private ArrayList<String> commandHistory;
 
-	/**
-	 * a hashmap to persist all the cost items and times
-	 */
-	private HashMap<String, Integer> costEvent;
+	private CostManager costManager;
 
-	/**
-	 * String for the name of cost items
-	 */
-	public String COMM_COST = "communication overhead";
+	private int[] initialLocation = { 0, -1 };
 
-	public String FUEL_COST = "fuel usage";
+	private Direction initialDirection = Direction.EAST;
 
-	public String UNCLEARED_COST = "uncleared squares";
-
-	public String DESTROY_TREE_COST = "destruction of protected tree";
-
-	public String PAINT_DAMAGE_COST = "paint damage to bulldozer";
+	class FuelConsumption {
+		public static final int PLAIN_GROUND = 1;
+		public static final int TREE_GROUND = 2;
+		public static final int ROCKY_GROUND = 2;
+		public static final int PROTECTED_TREE_GROUND = 2;
+	}
 
 	/**
 	 * initializer of the simulator
 	 * 
 	 * @param site
 	 */
-	public BullDozerSimulator(char[][] site) {
-		this.site = site;
-		loc = new int[] { 0, -1 };
-		facing = Direction.EAST;
-		commands = new ArrayList<>();
-		costEvent = new HashMap<>();
+	public BullDozerSimulator() {
+		site = new Site();
+		loc = initialLocation;
+		facing = initialDirection;
+		commandHistory = new ArrayList<>();
+		costManager = new CostManager();
 	}
 
-	public char[][] getSite() {
+	public Site getSiteManager() {
 		return site;
 	}
 
-	public void setSite(char[][] site) {
-		this.site = site;
+	public void setSiteManager(Site siteManager) {
+		this.site = siteManager;
 	}
 
-	/**
-	 * add a new cost to the map of cost
-	 * 
-	 * @param item the name of the cost item
-	 * @param time the time that the new cost occurred
-	 */
-	private void addCost(String item, int time) {
-		if (costEvent.get(item) == null) {
-			costEvent.put(item, time);
-		} else {
-			costEvent.put(item, costEvent.get(item) + time);
-		}
+	public ArrayList<String> getCommands() {
+		return commandHistory;
 	}
 
-	private int getCost(String item) {
-		if (costEvent.get(item) == null) {
-			return 0;
-		} else {
-			return costEvent.get(item);
-		}
+	public void setCommands(ArrayList<String> commands) {
+		this.commandHistory = commands;
 	}
 
-	public int getCommCost() {
-		return getCost(COMM_COST);
+	public CostManager getCostManager() {
+		return costManager;
 	}
 
-	public int getFuelCost() {
-		return getCost(FUEL_COST);
-	}
-
-	public int getUnclearedSquareCost() {
-		return getCost(UNCLEARED_COST);
-	}
-
-	public int getDestroyTreeCost() {
-		return getCost(DESTROY_TREE_COST);
-	}
-
-	public int getPaintDamageCost() {
-		return getCost(PAINT_DAMAGE_COST);
+	public void setCostManager(CostManager costManager) {
+		this.costManager = costManager;
 	}
 
 	/**
 	 * execute the operation of turning left
 	 */
-	private void turnLeft() {
-		// add command into list
-		commands.add("turn left");
-		// update facing
-		if (facing == Direction.EAST) {
-			facing = Direction.NORTH;
-		} else if (facing == Direction.NORTH) {
-			facing = Direction.WEST;
-		} else if (facing == Direction.WEST) {
-			facing = Direction.SOUTH;
-		} else if (facing == Direction.SOUTH) {
-			facing = Direction.EAST;
-		}
-		// add comm cost
-		addCost(COMM_COST, 1);
-	}
-
-	/**
-	 * execute the operation of turning right
-	 */
-	private void turnRight() {
-		// add command into list
-		commands.add("turn right");
-		// update facing
-		if (facing == Direction.EAST) {
-			facing = Direction.SOUTH;
-		} else if (facing == Direction.SOUTH) {
-			facing = Direction.WEST;
-		} else if (facing == Direction.WEST) {
-			facing = Direction.NORTH;
-		} else if (facing == Direction.NORTH) {
-			facing = Direction.EAST;
-		}
-		// add comm cost
-		addCost(COMM_COST, 1);
+	private void turn(Turn turn) {
+		facing = DirectionManager.updateDirection(facing, turn);
 	}
 
 	/**
@@ -169,144 +95,93 @@ public class BullDozerSimulator {
 	 */
 	public boolean execute(String[] cmd) {
 		boolean finalCommand = false;
-		if (cmd[0].equals("r")) {
-			turnRight();
-		} else if (cmd[0].equals("l")) {
-			turnLeft();
-		} else if (cmd[0].equals("a")) {
-			finalCommand = advance(Integer.parseInt(cmd[1]));
-		} else if (cmd[0].equals("q")) {
-			commands.add("quit");
+		Command command = new Command(cmd[0]);
+		List<int[]> path = null;
+		if (command.isTurnRight()) {
+			turn(Turn.RIGHT);
+		} else if (command.isTurnLeft()) {
+			turn(Turn.LEFT);
+		} else if (command.isAdvance()) {
+			int advanceLength = Integer.parseInt(cmd[1]);
+			path = advance(advanceLength);
+		} else if (command.isQuit()) {
 			finalCommand = true;
 		}
-		if (finalCommand) {
-			calculateUnclearedSquareCost();
+		// add command to command history
+		commandHistory.add(command.getCommandName());
+		// manage cost incurred by the command
+		if (!finalCommand) {
+			finalCommand = manageCost(command, path);
 		}
 		return finalCommand;
 	}
 
 	/**
-	 * calculate the cost of uncleared squares and add the item to cost map
-	 */
-	private void calculateUnclearedSquareCost() {
-		int cost = 0;
-		for (int i = 0; i < site.length; i++) {
-			for (int j = 0; j < site[0].length; j++) {
-				if (site[i][j] != 'c' && site[i][j] != 'T') {
-					cost++;
-				}
-			}
-		}
-		addCost(UNCLEARED_COST, cost);
-	}
-
-	public ArrayList<String> getCommands() {
-		return commands;
-	}
-
-	public void setCommands(ArrayList<String> commands) {
-		this.commands = commands;
-	}
-
-	public HashMap<String, Integer> getCostEvent() {
-		return costEvent;
-	}
-
-	public void setCostEvent(HashMap<String, Integer> costEvent) {
-		this.costEvent = costEvent;
-	}
-
-	/**
-	 * check if a given coordinate is in the map
 	 * 
-	 * @param xcoord
-	 * @param ycoord
-	 * @return true if the given coordinate is inside the map
+	 * @param dist the distance that the bull dozer advances
+	 * @return a list of nodes that the bull dozer has passed
 	 */
-	private boolean isInsideSite(int xcoord, int ycoord) {
-		if (xcoord < 0 || ycoord < 0 || xcoord >= site.length || ycoord >= site[0].length) {
-			return false;
-		}
-		return true;
-	}
-
-	/**
-	 * execute the advance operation
-	 * 
-	 * @param dist
-	 * @return true if the bull dozer is outside of map or removed a protected tree
-	 */
-	private boolean advance(int dist) {
-		// add command to the list
-		commands.add("advance " + dist);
-		// record the squares that this advance has passed
-		// if any square is outside of the map then set this command to final command
-		boolean finalCommand = false;
+	private List<int[]> advance(int dist) {
 		ArrayList<int[]> path = new ArrayList<>();
 		if (facing == Direction.EAST) {
 			for (int i = 1; i <= dist; i++) {
-				if (isInsideSite(loc[0], loc[1] + i)) {
-					path.add(new int[] { loc[0], loc[1] + i });
-				} else {
-					finalCommand = true;
-					break;
-				}
+				path.add(new int[] { loc[0], loc[1] + i });
 			}
 			loc[1] = loc[1] + dist;
 		}
 		if (facing == Direction.SOUTH) {
 			for (int i = 1; i <= dist; i++) {
-				if (isInsideSite(loc[0] + i, loc[1])) {
-					path.add(new int[] { loc[0] + i, loc[1] });
-				} else {
-					finalCommand = true;
-					break;
-				}
+				path.add(new int[] { loc[0] + i, loc[1] });
 			}
 			loc[0] = loc[0] + dist;
 		}
 		if (facing == Direction.WEST) {
 			for (int i = 1; i <= dist; i++) {
-				if (isInsideSite(loc[0], loc[1] - i)) {
-					path.add(new int[] { loc[0], loc[1] - i });
-				} else {
-					finalCommand = true;
-					break;
-				}
+				path.add(new int[] { loc[0], loc[1] - i });
 			}
 			loc[1] = loc[1] - dist;
 		}
 		if (facing == Direction.NORTH) {
 			for (int i = 1; i <= dist; i++) {
-				if (isInsideSite(loc[0] - i, loc[1])) {
-					path.add(new int[] { loc[0] - i, loc[1] });
-				} else {
-					finalCommand = true;
-					break;
-				}
+				path.add(new int[] { loc[0] - i, loc[1] });
 			}
 			loc[0] = loc[0] - dist;
 		}
-		// check the path and calculate the cost
-		addCost(COMM_COST, 1);
-		for (int i = 0; i < path.size(); i++) {
-			char ground = site[path.get(i)[0]][path.get(i)[1]];
-			if (ground == 'o' || ground == 'c') {
-				addCost(FUEL_COST, 1);
-			} else if (ground == 'r') {
-				addCost(FUEL_COST, 2);
-			} else if (ground == 't') {
-				addCost(FUEL_COST, 2);
-				if (i < path.size() - 1) {
-					addCost(PAINT_DAMAGE_COST, 1);
+		return path;
+	}
+
+	private boolean manageCost(Command command, List<int[]> path) {
+		boolean finalCommand = false;
+		if (command.isTurnLeft() || command.isTurnRight() || command.isAdvance()) {
+			costManager.addCost(CostManager.COMM_COST, 1);
+		}
+		if (command.isAdvance() && path != null) {
+			for (int i = 0; i < path.size(); i++) {
+				int xcoord = path.get(i)[0];
+				int ycoord = path.get(i)[1];
+				if (site.isInsideSite(xcoord, ycoord)) {
+					if (site.isPlainGround(xcoord, ycoord) || site.isClearedGround(xcoord, ycoord)) {
+						costManager.addCost(CostManager.FUEL_COST, FuelConsumption.PLAIN_GROUND);
+					} else if (site.isRockyGround(xcoord, ycoord)) {
+						costManager.addCost(CostManager.FUEL_COST, FuelConsumption.ROCKY_GROUND);
+					} else if (site.isTreeGround(xcoord, ycoord)) {
+						costManager.addCost(CostManager.FUEL_COST, FuelConsumption.TREE_GROUND);
+						if (i < path.size() - 1) {
+							costManager.addCost(CostManager.PAINT_DAMAGE_COST, 1);
+						}
+					} else if (site.isProtectedtreeGround(xcoord, ycoord)) {
+						costManager.addCost(CostManager.FUEL_COST, FuelConsumption.PROTECTED_TREE_GROUND);
+						costManager.addCost(CostManager.DESTROY_TREE_COST, 1);
+						finalCommand = true;
+					}
+					site.clear(xcoord, ycoord);
+				} else {
+					finalCommand = true;
 				}
-			} else if (ground == 'T') {
-				addCost(FUEL_COST, 2);
-				addCost(DESTROY_TREE_COST, 1);
-				finalCommand = true;
 			}
-			// mark the square cleared as c
-			site[path.get(i)[0]][path.get(i)[1]] = 'c';
+		}
+		if (finalCommand) {
+			costManager.addCost(CostManager.UNCLEARED_COST, site.calculateUnclearedSquareCost());
 		}
 		return finalCommand;
 	}
